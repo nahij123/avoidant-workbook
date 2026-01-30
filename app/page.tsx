@@ -8,17 +8,140 @@ declare global {
 }
 
 export default function Home() {
-  // 기본값(나중에 .env로 바꿔도 됨)
-  const productName =
-    process.env.NEXT_PUBLIC_PRODUCT_NAME ?? "Avoidant Attachment Recovery Workbook";
-  const currency = process.env.NEXT_PUBLIC_CURRENCY ?? "USD";
-  const price = process.env.NEXT_PUBLIC_PRICE_USD ?? "19.00";
+  // ===== product config =====
+const productName =
+  process.env.NEXT_PUBLIC_PRODUCT_NAME ||
+  "Avoidant Attachment Recovery Workbook";
 
-  // PayPal은 지금 “버튼이 뜨는지”만 확인용 (이미 됐으니, 디자인 먼저)
-  const clientId = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID ?? "";
+const currency = process.env.NEXT_PUBLIC_CURRENCY || "USD";
+const price = process.env.NEXT_PUBLIC_PRICE_USD || "19.00";
+// ===== PayPal client id (from server) =====
+const [clientId, setClientId] = useState<string>("");
+const [status, setStatus] = useState<string>("");
 
-  const [status, setStatus] = useState("");
-  const [sdkReady, setSdkReady] = useState(false);
+// 1) Load clientId from server API
+useEffect(() => {
+  const loadPaypalConfig = async () => {
+    try {
+      const res = await fetch("/api/config", { cache: "no-store" });
+      const json = await res.json();
+      const id = json?.clientId ?? "";
+      setClientId(id);
+      setStatus(id ? "PayPal config loaded" : "Missing PayPal client id");
+    } catch (e) {
+      console.error(e);
+      setClientId("");
+      setStatus("Failed to load PayPal config");
+    }
+  };
+  loadPaypalConfig();
+}, []);
+
+// 2) When clientId exists, load PayPal SDK script and render buttons
+useEffect(() => {
+  if (!clientId) return;
+
+  const scriptId = "paypal-sdk";
+  const existing = document.getElementById(scriptId) as HTMLScriptElement | null;
+
+  const loadScript = () =>
+    new Promise<void>((resolve, reject) => {
+      if (existing) return resolve();
+
+      const s = document.createElement("script");
+      s.id = scriptId;
+      s.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&currency=${currency}`;
+      s.async = true;
+      s.onload = () => resolve();
+      s.onerror = () => reject(new Error("Failed to load PayPal SDK"));
+      document.body.appendChild(s);
+    });
+
+  const renderButtons = async () => {
+    try {
+      setStatus("Loading PayPal SDK...");
+      await loadScript();
+
+      const container = document.getElementById("paypal-buttons");
+      if (!container) {
+        setStatus("Missing #paypal-buttons container");
+        return;
+      }
+      container.innerHTML = ""; // clear previous
+
+      if (!window.paypal?.Buttons) {
+        setStatus("PayPal SDK loaded, but Buttons not available");
+        return;
+      }
+
+      setStatus("Rendering PayPal buttons...");
+
+      window.paypal
+        .Buttons({
+          createOrder: async () => {
+            const res = await fetch("/api/paypal/create-order", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ currency, price }),
+            });
+            const data = await res.json();
+            if (!data?.id) throw new Error("No order id returned");
+            return data.id;
+          },
+          onApprove: async (data: any) => {
+            const res = await fetch("/api/paypal/capture-order", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ orderID: data.orderID }),
+            });
+            const result = await res.json();
+            setStatus(`Payment completed: ${result?.status ?? "OK"}`);
+          },
+          onError: (err: any) => {
+            console.error(err);
+            setStatus("PayPal error. Check console.");
+          },
+        })
+        .render("#paypal-buttons");
+
+      setStatus("Ready");
+    } catch (e: any) {
+      console.error(e);
+      setStatus(e?.message ?? "PayPal failed");
+    }
+  };
+
+  renderButtons();
+}, [clientId, currency, price]);
+// ===== PayPal client id (from server) =====
+const [clientId, setClientId] = useState<string>("");
+
+// ===== product config =====
+const productName =
+  process.env.NEXT_PUBLIC_PRODUCT_NAME ||
+  "Avoidant Attachment Recovery Workbook";
+
+const currency = process.env.NEXT_PUBLIC_CURRENCY || "USD";
+const price = process.env.NEXT_PUBLIC_PRICE_USD || "19.00";
+
+// ===== PayPal client id (from server) =====
+const [clientId, setClientId] = useState<string>("");
+
+useEffect(() => {
+  const loadPaypalConfig = async () => {
+    try {
+      const res = await fetch("/api/config", { cache: "no-store" });
+      const json = await res.json();
+      setClientId(json?.clientId ?? "");
+    } catch (e) {
+      console.error("Failed to load PayPal config", e);
+      setClientId("");
+    }
+  };
+
+  loadPaypalConfig();
+}, []);
+
 
   const nav = useMemo(
     () => [
@@ -313,14 +436,10 @@ export default function Home() {
             </div>
 
             <div className="mt-5 max-w-md">
-              {!clientId ? (
-                <div className="rounded-2xl border border-zinc-200 bg-[#fbfaf7] p-4 text-sm text-zinc-700">
-                  PayPal 연결은 되어있지만, 지금은 디자인 먼저 보는 중이라 버튼을 숨겼어.
-                  나중에 `.env.local`의 `NEXT_PUBLIC_PAYPAL_CLIENT_ID`가 있으면 버튼이 자동으로 보여.
-                </div>
-              ) : (
-                <div id="paypal-buttons" />
-              )}
+              <div id="paypal-buttons" />
+<p className="mt-3 text-xs text-zinc-500">
+  PayPal: {clientId ? "clientId OK" : "loading clientId..."}
+</p>
 
               <p className="mt-3 text-xs text-zinc-500">
                 Educational content only. Not medical advice.
