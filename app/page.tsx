@@ -329,17 +329,14 @@ export default function Home() {
           </div>
         </section>
 
-        <footer className="mt-12 pb-8 text-xs text-zinc-500">
-          <div className="flex flex-wrap gap-3">
-            <button className="hover:text-zinc-800" onClick={() => scrollTo("faq")}>
-              Refund policy (soon)
-            </button>
-            <span className="opacity-60">·</span>
-            <span>Contact: (add email)</span>
-            <span className="opacity-60">·</span>
-            <span>© {new Date().getFullYear()} NAHIJ</span>
-          </div>
-        </footer>
+        <footer className="mt-16 border-t pt-6 text-xs text-zinc-500">
+  <div className="flex flex-wrap gap-4 justify-center">
+    <a href="/terms" className="hover:text-zinc-900">Terms</a>
+    <a href="/privacy" className="hover:text-zinc-900">Privacy</a>
+    <a href="/refunds" className="hover:text-zinc-900">Refunds</a>
+    <span>© {new Date().getFullYear()} Avoidant Workbook</span>
+  </div>
+</footer>
       </main>
     </div>
   );
